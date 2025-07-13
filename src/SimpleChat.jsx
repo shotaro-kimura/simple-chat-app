@@ -54,9 +54,9 @@ const SimpleChat = () => {
       !containsLegalName(msg.text)
   );
 
-  // 完全一致するメッセージだけ抽出（入力欄のすぐ上に表示用）
-  const exactMatches = messages.filter(
-    msg => trimmedInput !== '' && msg.text === trimmedInput
+  // 修正後：部分一致に変更
+const exactMatches = messages.filter(
+    msg => trimmedInput !== '' && msg.text.includes(trimmedInput)
   );
 
   // 入力中のプレビュー用メッセージ
