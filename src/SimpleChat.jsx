@@ -6,9 +6,9 @@ const getCurrentTime = () => {
 };
 
 const containsLegalName = (text) => {
-  const legalTerms = ['株式会社', '有限会社', '合同会社', 'Inc.', 'LLC', 'G.K.'];
-  return legalTerms.some(term => text.includes(term));
-};
+    const legalTerms = ['株式会社', '有限会社', '合同会社', 'Inc.', 'LLC', 'G.K.'];
+    return legalTerms.some(term => text.includes(term)); // ★ここだけ変更！
+  };
 
 const SimpleChat = () => {
   const [messages, setMessages] = useState([]);
