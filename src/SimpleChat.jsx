@@ -207,29 +207,29 @@ const SimpleChat = () => {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <input
-          type="text"
-          placeholder="メッセージを入力"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              if (e.ctrlKey || e.metaKey) {
-                sendMessage('black');
-              } else {
-                sendMessage('red');
-              }
-            }
-          }}
-          style={{ flex: 1, padding: 8, fontSize: 16 }}
-        />
-        <button onClick={() => sendMessage('black')} style={{ padding: '8px 16px' }}>
-          送信
-        </button>
-      </div>
-    </div>
-  );
+<div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+  <input
+    type="text"
+    placeholder="メッセージを入力"
+    value={input}
+    onChange={(e) => setInput(e.target.value)}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter') {
+        if (e.ctrlKey || e.metaKey) {
+          sendMessage('black');
+        } else {
+          sendMessage('red');
+        }
+      }
+    }}
+    style={{ flex: 1, padding: 8, fontSize: 16 }}
+  />
+  <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+    Enter → 流入（赤）　Control+Enter → 掘る（黒）
+  </div>
+  </div>
+  </div>
+);
 };
 
 export default SimpleChat;
