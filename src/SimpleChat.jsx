@@ -10,7 +10,6 @@ const getCurrentTime = () => {
   return d.toLocaleTimeString();
 };
 
-// 除外ワード一覧
 const excludedKeywords = [
   '株式会社', '（株）', '有限会社', '（有）', '合名会社', '（名）', '合資会社', '（資）', '合同会社', '（同）',
   '医療法人', '（医）', '医療法人社団', '医療法人財団', '社会医療法人', '一般財団法人', '（一財）',
@@ -19,12 +18,11 @@ const excludedKeywords = [
   '特定非営利活動法人', '（特非）', '独立行政法人', '（独）', '地方独立行政法人', '（地独）',
   '弁護士法人', '（弁）', '有限責任中間法人', '（中）', '無限責任中間法人', '行政書士法人', '（行）',
   '司法書士法人', '（司）', '税理士法人', '（税）', '国立大学法人', '（大）', '公立大学法人',
-  '農事組合法人', '管理組合法人', '社会保険労務士法人','株式'
+  '農事組合法人', '管理組合法人', '社会保険労務士法人', '株式'
 ];
 
-// メッセージや入力が "完全に" 除外ワードだけのときに除外扱いにする
 const isExcluded = (text, input) => {
-  const normalize = str => str.replace(/\s/g, ''); // 空白を除去
+  const normalize = str => str.replace(/\s/g, '');
   const cleanedText = normalize(text);
   const cleanedInput = normalize(input);
   return excludedKeywords.includes(cleanedText) || excludedKeywords.includes(cleanedInput);
@@ -73,21 +71,20 @@ const SimpleChat = () => {
   const sendMessage = async (color) => {
     const trimmed = input.trim();
     if (!trimmed || !username.trim()) return;
-  
-    // 除外語だけのメッセージは送信不可（完全一致）
+
     const isOnlyExcluded = excludedKeywords.some(term => trimmed === term);
     if (isOnlyExcluded) {
       alert('除外ワードのみのメッセージは送信できません');
       return;
     }
-  
+
     const newMessage = {
       user: username,
       text: trimmed,
       time: getCurrentTime(),
       color,
     };
-  
+
     try {
       const { error } = await supabase.from('messages').insert([newMessage]);
       if (error) throw error;
@@ -97,7 +94,6 @@ const SimpleChat = () => {
       alert('送信に失敗しました');
     }
   };
-
   const handleDelete = async (id) => {
     if (window.confirm('このメッセージを削除しますか？')) {
       await deleteMessage(id);
@@ -125,6 +121,7 @@ const SimpleChat = () => {
         text: input,
         time: getCurrentTime(),
         preview: true,
+        color: '', // プレビューは色なし
       }
     : null;
 
@@ -167,7 +164,9 @@ const SimpleChat = () => {
           <ul style={{ listStyle: 'none', paddingLeft: 0, margin: '8px 0' }}>
             {matchingMessages.slice(0, 5).map(msg => (
               <li key={msg.id} style={{ padding: '4px 0', borderBottom: '1px dashed #ddd', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                <span><strong>{msg.user}</strong>: {msg.text}</span>
+                <span style={{ color: msg.color === 'red' ? 'red' : 'black' }}>
+                  <strong>{msg.user}</strong>: {msg.text}
+                </span>
                 <span style={{ color: '#999', marginLeft: 8, whiteSpace: 'nowrap' }}>{msg.time}</span>
               </li>
             ))}
@@ -177,7 +176,7 @@ const SimpleChat = () => {
 
       <div ref={logRef} style={{ border: '1px solid #ccc', height: 320, overflowY: 'scroll', padding: 10, marginBottom: 10, backgroundColor: '#f9f9f9', borderRadius: 8 }}>
         {combinedMessages.map(({ id, user, text, time, preview, color }) => (
-          <div key={id} style={{ marginBottom: 12, padding: 8, backgroundColor: preview ? '#fffbe6' : '#eef2f7', borderRadius: 8, position: 'relative', opacity: preview ? 0.6 : 1, fontStyle: preview ? 'italic' : 'normal', wordBreak: 'break-word', color: color || 'black' }}>
+          <div key={id} style={{ marginBottom: 12, padding: 8, backgroundColor: preview ? '#fffbe6' : '#eef2f7', borderRadius: 8, position: 'relative', opacity: preview ? 0.6 : 1, fontStyle: preview ? 'italic' : 'normal', wordBreak: 'break-word' }}>
             <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
               {user} {preview && <span style={{ fontSize: 12, color: '#999' }}>(入力中)</span>}
             </div>
@@ -198,7 +197,9 @@ const SimpleChat = () => {
           <ul style={{ paddingLeft: 16, marginTop: 6 }}>
             {exactMatches.map((msg) => (
               <li key={msg.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
-                <span><strong>{msg.user}</strong>: {msg.text}</span>
+                <span style={{ color: msg.color === 'red' ? 'red' : 'black' }}>
+                  <strong>{msg.user}</strong>: {msg.text}
+                </span>
                 <span style={{ color: '#999', whiteSpace: 'nowrap' }}>{msg.time}</span>
               </li>
             ))}
