@@ -164,7 +164,7 @@ const SimpleChat = () => {
             <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
               {user} {preview && <span style={{ fontSize: 12, color: '#999' }}>(入力中)</span>}
             </div>
-            <div style={{ whiteSpace: 'pre-wrap', fontSize: 16,color: msg.color === 'red' ? 'red' : 'black', }}>{text}</div>
+            <div style={{ whiteSpace: 'pre-wrap', fontSize: 16, color: color === 'red' ? 'red' : 'black' }}>{text}</div>
             <div style={{ position: 'absolute', right: 8, bottom: 8, fontSize: 12, color: '#888' }}>{time}</div>
             {!preview && (
               <button
