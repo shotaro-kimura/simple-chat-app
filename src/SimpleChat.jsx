@@ -15,6 +15,11 @@ const containsLegalName = (text) => {
   return legalTerms.some(term => text.includes(term));
 };
 
+const deleteMessage = async (id) => {
+  const { error } = await supabase.from('messages').delete().eq('id', id);
+  if (error) console.error('削除エラー:', error.message);
+};
+
 const SimpleChat = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -27,8 +32,12 @@ const SimpleChat = () => {
 
     const subscription = supabase
       .channel('chat-room')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        setMessages(prev => [...prev, payload.new]);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setMessages(prev => [...prev, payload.new]);
+        } else if (payload.eventType === 'DELETE') {
+          setMessages(prev => prev.filter(msg => msg.id !== payload.old.id));
+        }
       })
       .subscribe();
 
@@ -59,6 +68,12 @@ const SimpleChat = () => {
     };
     await supabase.from('messages').insert([newMessage]);
     setInput('');
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm('このメッセージを削除しますか？')) {
+      await deleteMessage(id);
+    }
   };
 
   const handleUsernameSubmit = () => {
@@ -150,6 +165,14 @@ const SimpleChat = () => {
             </div>
             <div style={{ whiteSpace: 'pre-wrap', fontSize: 16 }}>{text}</div>
             <div style={{ position: 'absolute', right: 8, bottom: 8, fontSize: 12, color: '#888' }}>{time}</div>
+            {!preview && (
+              <button
+                onClick={() => handleDelete(id)}
+                style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, background: 'transparent', border: 'none', color: 'red', cursor: 'pointer' }}
+              >
+                削除
+              </button>
+            )}
           </div>
         ))}
       </div>
