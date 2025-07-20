@@ -10,9 +10,20 @@ const getCurrentTime = () => {
   return d.toLocaleTimeString();
 };
 
-const containsLegalName = (text) => {
-  const legalTerms = ['株式会社', '有限会社', '合同会社', 'Inc.', 'LLC', 'G.K.'];
-  return legalTerms.some(term => text.includes(term));
+// 除外ワード一覧
+const excludedKeywords = [
+  '株式会社', '（株）', '有限会社', '（有）', '合名会社', '（名）', '合資会社', '（資）', '合同会社', '（同）',
+  '医療法人', '（医）', '医療法人社団', '医療法人財団', '社会医療法人', '一般財団法人', '（一財）',
+  '公益財団法人', '（公財）', '社団法人', '（社法）', '一般社団法人', '（一社）', '公益社団法人', '（公社）',
+  '宗教法人', '（宗）', '学校法人', '（学）', '社会福祉法人', '（福）', '更生保護法人', '相互会社', '（相）',
+  '特定非営利活動法人', '（特非）', '独立行政法人', '（独）', '地方独立行政法人', '（地独）',
+  '弁護士法人', '（弁）', '有限責任中間法人', '（中）', '無限責任中間法人', '行政書士法人', '（行）',
+  '司法書士法人', '（司）', '税理士法人', '（税）', '国立大学法人', '（大）', '公立大学法人',
+  '農事組合法人', '管理組合法人', '社会保険労務士法人'
+];
+
+const isExcluded = (text, input) => {
+  return excludedKeywords.some(term => text.includes(term) || input.includes(term));
 };
 
 const deleteMessage = async (id) => {
@@ -29,7 +40,6 @@ const SimpleChat = () => {
 
   useEffect(() => {
     fetchMessages();
-
     const subscription = supabase
       .channel('chat-room')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
@@ -40,7 +50,6 @@ const SimpleChat = () => {
         }
       })
       .subscribe();
-
     return () => {
       supabase.removeChannel(subscription);
     };
@@ -54,9 +63,7 @@ const SimpleChat = () => {
 
   const fetchMessages = async () => {
     const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-    if (!error) {
-      setMessages(data);
-    }
+    if (!error) setMessages(data);
   };
 
   const sendMessage = async (color) => {
@@ -84,7 +91,7 @@ const SimpleChat = () => {
   const trimmedInput = input.trim();
 
   const matchingMessages = messages.filter(
-    msg => trimmedInput && msg.text.includes(trimmedInput) && !containsLegalName(msg.text)
+    msg => trimmedInput && msg.text.includes(trimmedInput) && !isExcluded(msg.text, trimmedInput)
   );
 
   const exactMatches = messages.filter(
@@ -104,8 +111,7 @@ const SimpleChat = () => {
   const filteredMessages = messages.filter(msg => {
     if (!trimmedInput) return true;
     const isPartialMatch = msg.text.includes(trimmedInput);
-    const isLegal = containsLegalName(msg.text);
-    return !(isPartialMatch && !isLegal);
+    return !(isPartialMatch && isExcluded(msg.text, trimmedInput));
   });
 
   const combinedMessages = inputPreview
@@ -140,10 +146,7 @@ const SimpleChat = () => {
           <strong>過去の一致するメッセージ:</strong>
           <ul style={{ listStyle: 'none', paddingLeft: 0, margin: '8px 0' }}>
             {matchingMessages.slice(0, 5).map(msg => (
-              <li
-                key={msg.id}
-                style={{ padding: '4px 0', borderBottom: '1px dashed #ddd', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}
-              >
+              <li key={msg.id} style={{ padding: '4px 0', borderBottom: '1px dashed #ddd', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
                 <span><strong>{msg.user}</strong>: {msg.text}</span>
                 <span style={{ color: '#999', marginLeft: 8, whiteSpace: 'nowrap' }}>{msg.time}</span>
               </li>
@@ -152,25 +155,16 @@ const SimpleChat = () => {
         </div>
       )}
 
-      <div
-        ref={logRef}
-        style={{ border: '1px solid #ccc', height: 320, overflowY: 'scroll', padding: 10, marginBottom: 10, backgroundColor: '#f9f9f9', borderRadius: 8 }}
-      >
+      <div ref={logRef} style={{ border: '1px solid #ccc', height: 320, overflowY: 'scroll', padding: 10, marginBottom: 10, backgroundColor: '#f9f9f9', borderRadius: 8 }}>
         {combinedMessages.map(({ id, user, text, time, preview, color }) => (
-          <div
-            key={id}
-            style={{ marginBottom: 12, padding: 8, backgroundColor: preview ? '#fffbe6' : '#eef2f7', borderRadius: 8, position: 'relative', opacity: preview ? 0.6 : 1, fontStyle: preview ? 'italic' : 'normal', wordBreak: 'break-word', color: color || 'black' }}
-          >
+          <div key={id} style={{ marginBottom: 12, padding: 8, backgroundColor: preview ? '#fffbe6' : '#eef2f7', borderRadius: 8, position: 'relative', opacity: preview ? 0.6 : 1, fontStyle: preview ? 'italic' : 'normal', wordBreak: 'break-word', color: color || 'black' }}>
             <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
               {user} {preview && <span style={{ fontSize: 12, color: '#999' }}>(入力中)</span>}
             </div>
             <div style={{ whiteSpace: 'pre-wrap', fontSize: 16, color: color === 'red' ? 'red' : 'black' }}>{text}</div>
             <div style={{ position: 'absolute', right: 8, bottom: 8, fontSize: 12, color: '#888' }}>{time}</div>
             {!preview && (
-              <button
-                onClick={() => handleDelete(id)}
-                style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, background: 'transparent', border: 'none', color: 'red', cursor: 'pointer' }}
-              >
+              <button onClick={() => handleDelete(id)} style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, background: 'transparent', border: 'none', color: 'red', cursor: 'pointer' }}>
                 削除
               </button>
             )}
@@ -183,10 +177,7 @@ const SimpleChat = () => {
           <strong>過去に同じ内容が {exactMatches.length} 件見つかりました：</strong>
           <ul style={{ paddingLeft: 16, marginTop: 6 }}>
             {exactMatches.map((msg) => (
-              <li
-                key={msg.id}
-                style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}
-              >
+              <li key={msg.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
                 <span><strong>{msg.user}</strong>: {msg.text}</span>
                 <span style={{ color: '#999', whiteSpace: 'nowrap' }}>{msg.time}</span>
               </li>
