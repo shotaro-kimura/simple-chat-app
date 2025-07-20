@@ -22,8 +22,12 @@ const excludedKeywords = [
   '農事組合法人', '管理組合法人', '社会保険労務士法人'
 ];
 
+// メッセージや入力が "完全に" 除外ワードだけのときに除外扱いにする
 const isExcluded = (text, input) => {
-  return excludedKeywords.some(term => text.includes(term) || input.includes(term));
+  const normalize = str => str.replace(/\s/g, ''); // 空白を除去
+  const cleanedText = normalize(text);
+  const cleanedInput = normalize(input);
+  return excludedKeywords.includes(cleanedText) || excludedKeywords.includes(cleanedInput);
 };
 
 const deleteMessage = async (id) => {
