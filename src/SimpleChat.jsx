@@ -95,7 +95,7 @@ const SimpleChat = () => {
   );
 
   const exactMatches = messages.filter(
-    msg => trimmedInput !== '' && msg.text.includes(trimmedInput) && !containsLegalName(msg.text)
+    msg => trimmedInput !== '' && msg.text.includes(trimmedInput) && !isExcluded(msg.text, trimmedInput)
   );
 
   const inputPreview = trimmedInput
