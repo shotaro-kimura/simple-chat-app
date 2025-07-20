@@ -59,12 +59,13 @@ const SimpleChat = () => {
     }
   };
 
-  const sendMessage = async () => {
+  const sendMessage = async (color) => {
     if (!input.trim() || !username.trim()) return;
     const newMessage = {
       user: username,
       text: input,
       time: getCurrentTime(),
+      color,
     };
     await supabase.from('messages').insert([newMessage]);
     setInput('');
@@ -155,10 +156,10 @@ const SimpleChat = () => {
         ref={logRef}
         style={{ border: '1px solid #ccc', height: 320, overflowY: 'scroll', padding: 10, marginBottom: 10, backgroundColor: '#f9f9f9', borderRadius: 8 }}
       >
-        {combinedMessages.map(({ id, user, text, time, preview }) => (
+        {combinedMessages.map(({ id, user, text, time, preview, color }) => (
           <div
             key={id}
-            style={{ marginBottom: 12, padding: 8, backgroundColor: preview ? '#fffbe6' : '#eef2f7', borderRadius: 8, position: 'relative', opacity: preview ? 0.6 : 1, fontStyle: preview ? 'italic' : 'normal', wordBreak: 'break-word' }}
+            style={{ marginBottom: 12, padding: 8, backgroundColor: preview ? '#fffbe6' : '#eef2f7', borderRadius: 8, position: 'relative', opacity: preview ? 0.6 : 1, fontStyle: preview ? 'italic' : 'normal', wordBreak: 'break-word', color: color || 'black' }}
           >
             <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
               {user} {preview && <span style={{ fontSize: 12, color: '#999' }}>(入力中)</span>}
@@ -200,10 +201,18 @@ const SimpleChat = () => {
           placeholder="メッセージを入力"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              if (e.ctrlKey || e.metaKey) {
+                sendMessage('black');
+              } else {
+                sendMessage('red');
+              }
+            }
+          }}
           style={{ flex: 1, padding: 8, fontSize: 16 }}
         />
-        <button onClick={sendMessage} style={{ padding: '8px 16px' }}>
+        <button onClick={() => sendMessage('black')} style={{ padding: '8px 16px' }}>
           送信
         </button>
       </div>
