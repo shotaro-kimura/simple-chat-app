@@ -67,15 +67,31 @@ const SimpleChat = () => {
   };
 
   const sendMessage = async (color) => {
-    if (!input.trim() || !username.trim()) return;
+    const trimmed = input.trim();
+    if (!trimmed || !username.trim()) return;
+  
+    // 除外語だけのメッセージは送信不可（完全一致）
+    const isOnlyExcluded = excludedKeywords.some(term => trimmed === term);
+    if (isOnlyExcluded) {
+      alert('除外ワードのみのメッセージは送信できません');
+      return;
+    }
+  
     const newMessage = {
       user: username,
-      text: input,
+      text: trimmed,
       time: getCurrentTime(),
       color,
     };
-    await supabase.from('messages').insert([newMessage]);
-    setInput('');
+  
+    try {
+      const { error } = await supabase.from('messages').insert([newMessage]);
+      if (error) throw error;
+      setInput('');
+    } catch (err) {
+      console.error('送信エラー:', err.message);
+      alert('送信に失敗しました');
+    }
   };
 
   const handleDelete = async (id) => {
