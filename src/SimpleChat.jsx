@@ -106,9 +106,12 @@ const SimpleChat = () => {
 
   const trimmedInput = input.trim();
 
-  const matchingMessages = messages.filter(
-    msg => trimmedInput && msg.text.includes(trimmedInput) && !isExcluded(msg.text, trimmedInput)
-  );
+  // 🔽 最新6件に絞ってから検索（過去すべてではなく、直近のみ）
+const latestMessages = [...messages].slice(-6); // 最新6件取得
+
+const matchingMessages = latestMessages.filter(
+  msg => trimmedInput && msg.text.includes(trimmedInput) && !isExcluded(msg.text, trimmedInput)
+);
 
   const exactMatches = messages.filter(
     msg => trimmedInput !== '' && msg.text.includes(trimmedInput) && !isExcluded(msg.text, trimmedInput)
