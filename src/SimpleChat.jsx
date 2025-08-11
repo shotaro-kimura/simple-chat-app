@@ -24,6 +24,49 @@ const deleteMessage = async (id) => {
   if (error) console.error('削除エラー:', error.message);
 };
 
+// created_at があればそれを、無ければ time("HH:MM:SS") を今日の日付で作る
+const parseMessageDate = (msg) => {
+  // 1) created_at を優先
+  if (msg?.created_at) {
+    const t = Date.parse(msg.created_at);
+    if (!Number.isNaN(t)) return new Date(t);
+  }
+
+  // 2) time から今日の日付の Date を組み立てる（例: "22:07:04"）
+  if (msg?.time) {
+    const [hh, mm, ss] = String(msg.time).split(':').map((v) => Number(v));
+    if (!Number.isNaN(hh)) {
+      const d = new Date();
+      d.setHours(hh || 0, mm || 0, ss || 0, 0);
+      return d;
+    }
+  }
+
+  // 3) どちらもダメなら null
+  return null;
+};
+
+// ── 午前/午後が同じか（created_at が無くても time で判定できる）
+const isSameTimePeriod = (msg) => {
+  const dt = parseMessageDate(msg);
+  if (!dt) return false; // 不明ならマッチさせない
+  const now = new Date();
+  const isNowAM = now.getHours() < 12;
+  const isMsgAM = dt.getHours() < 12;
+  return isNowAM === isMsgAM;
+};
+
+// ── 同じ“今日”か（ローカル日付）
+const isSameDay = (msg) => {
+  const dt = parseMessageDate(msg);
+  if (!dt) return false;
+  const now = new Date();
+  return (
+    dt.getFullYear() === now.getFullYear() &&
+    dt.getMonth() === now.getMonth() &&
+    dt.getDate() === now.getDate()
+  );
+};
 const SimpleChat = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -101,10 +144,14 @@ const SimpleChat = () => {
   const recentMessages = messages.slice(-6);
 
   const exactMatches = trimmedInput !== ''
-    ? recentMessages.filter(
-        msg => msg.text === trimmedInput && !isExcluded(msg.text, trimmedInput)
-      )
-    : [];
+  ? messages.filter(
+      (msg) =>
+        msg.text === trimmedInput &&
+        !isExcluded(msg.text, trimmedInput) &&
+        isSameTimePeriod(msg) &&   // ← ここを msg に
+        isSameDay(msg)             // ← 同じく msg に
+    )
+  : [];
 
   const inputPreview = trimmedInput
     ? {
@@ -168,7 +215,7 @@ const SimpleChat = () => {
 
       {exactMatches.length > 0 && (
         <div style={{ marginBottom: 10, padding: 10, backgroundColor: '#fff4e6', border: '1px solid #ffa726', borderRadius: 8 }}>
-          <strong>過去に6件以内に同じ内容が {exactMatches.length} 件見つかりました：</strong>
+          <strong>過去に同じ内容が {exactMatches.length} 件見つかりました：</strong>
           <ul style={{ paddingLeft: 16, marginTop: 6 }}>
             {exactMatches.map((msg) => (
               <li key={msg.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
