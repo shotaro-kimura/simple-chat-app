@@ -10,13 +10,14 @@ const getCurrentTime = () => {
   return d.toLocaleTimeString();
 };
 
-const excludedKeywords = [ /* ...省略（同じリスト） */ ];
+// 除外ワード（省略していたらここに今までの配列を入れてね）
+const excludedKeywords = [/* これまでのリストそのまま */];
 
 const isExcluded = (text, input) => {
-  const normalize = str => str.replace(/\s/g, '');
-  const cleanedText = normalize(text);
-  const cleanedInput = normalize(input);
-  return excludedKeywords.includes(cleanedText) || excludedKeywords.includes(cleanedInput);
+  const normalize = (s) => s.replace(/\s/g, '');
+  const a = normalize(text);
+  const b = normalize(input);
+  return excludedKeywords.includes(a) || excludedKeywords.includes(b);
 };
 
 const deleteMessage = async (id) => {
@@ -24,89 +25,102 @@ const deleteMessage = async (id) => {
   if (error) console.error('削除エラー:', error.message);
 };
 
-// created_at があればそれを、無ければ time("HH:MM:SS") を今日の日付で作る
-const parseMessageDate = (msg) => {
-  // 1) created_at を優先
-  if (msg?.created_at) {
-    const t = Date.parse(msg.created_at);
-    if (!Number.isNaN(t)) return new Date(t);
-  }
+// ローカルタイムで “同じ日” かを判定（created_at が無くても安全に true 扱い）
+const isSameLocalDay = (dateStr) => {
+  if (!dateStr) return true;
+  const t = Date.parse(dateStr);
+  if (Number.isNaN(t)) return true;
 
-  // 2) time から今日の日付の Date を組み立てる（例: "22:07:04"）
-  if (msg?.time) {
-    const [hh, mm, ss] = String(msg.time).split(':').map((v) => Number(v));
-    if (!Number.isNaN(hh)) {
-      const d = new Date();
-      d.setHours(hh || 0, mm || 0, ss || 0, 0);
-      return d;
-    }
-  }
-
-  // 3) どちらもダメなら null
-  return null;
-};
-
-// ── 午前/午後が同じか（created_at が無くても time で判定できる）
-const isSameTimePeriod = (msg) => {
-  const dt = parseMessageDate(msg);
-  if (!dt) return false; // 不明ならマッチさせない
-  const now = new Date();
-  const isNowAM = now.getHours() < 12;
-  const isMsgAM = dt.getHours() < 12;
-  return isNowAM === isMsgAM;
-};
-
-// ── 同じ“今日”か（ローカル日付）
-const isSameDay = (msg) => {
-  const dt = parseMessageDate(msg);
-  if (!dt) return false;
+  const msg = new Date(t);
   const now = new Date();
   return (
-    dt.getFullYear() === now.getFullYear() &&
-    dt.getMonth() === now.getMonth() &&
-    dt.getDate() === now.getDate()
+    msg.getFullYear() === now.getFullYear() &&
+    msg.getMonth() === now.getMonth() &&
+    msg.getDate() === now.getDate()
   );
 };
+
+// “YYYY-MM-DD” のキー（ローカル日付）
+const getLocalDateKey = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+
+// 次の深夜0時までのms
+const msUntilNextMidnight = () => {
+  const now = new Date();
+  const next = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+    0,
+    0,
+    0,
+    0
+  );
+  return next.getTime() - now.getTime();
+};
+
 const SimpleChat = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [username, setUsername] = useState('');
   const [isUsernameSet, setIsUsernameSet] = useState(false);
+  const [dayKey, setDayKey] = useState(getLocalDateKey()); // その日のキー
   const logRef = useRef(null);
 
+  // 初期フェッチ + リアルタイム購読
   useEffect(() => {
     fetchMessages();
+
     const subscription = supabase
       .channel('chat-room')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         if (payload.eventType === 'INSERT') {
-          setMessages(prev => [...prev, payload.new]);
+          setMessages((prev) => [...prev, payload.new]);
         } else if (payload.eventType === 'DELETE') {
-          setMessages(prev => prev.filter(msg => msg.id !== payload.old.id));
+          setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
         }
       })
       .subscribe();
+
     return () => {
       supabase.removeChannel(subscription);
     };
   }, []);
 
+  // スクロール追従
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
   }, [messages]);
 
+  // 深夜0時でリセット（画面を空にする & dayKey 更新）
+  useEffect(() => {
+    let timer = setTimeout(() => {
+      setDayKey(getLocalDateKey());
+      setMessages([]); // 画面側をリセット（DBは消さない）
+      // 次の日の0時に向けて再度セット
+      timer = setTimeout(() => {}, msUntilNextMidnight());
+    }, msUntilNextMidnight());
+
+    return () => clearTimeout(timer);
+  }, []);
+
   const fetchMessages = async () => {
-    const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-    if (!error) setMessages(data);
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (!error) setMessages(data || []);
   };
 
   const sendMessage = async (color) => {
     const trimmed = input.trim();
     if (!trimmed || !username.trim()) return;
 
-    const isOnlyExcluded = excludedKeywords.some(term => trimmed === term);
+    const isOnlyExcluded = excludedKeywords.some((term) => trimmed === term);
     if (isOnlyExcluded) {
       alert('除外ワードのみのメッセージは送信できません');
       return;
@@ -115,8 +129,9 @@ const SimpleChat = () => {
     const newMessage = {
       user: username,
       text: trimmed,
-      time: getCurrentTime(),
+      time: getCurrentTime(), // 表示用
       color,
+      // created_at は Supabase のデフォルト（now()）に任せる
     };
 
     try {
@@ -141,34 +156,41 @@ const SimpleChat = () => {
 
   const trimmedInput = input.trim();
 
-  const recentMessages = messages.slice(-6);
+  // ▼ 今日のメッセージだけに限定（表示＆検索の両方）
+  const todaysMessages = messages.filter((m) => isSameLocalDay(m.created_at));
 
-  const exactMatches = trimmedInput !== ''
-  ? messages.filter(
-      (msg) =>
-        msg.text === trimmedInput &&
-        !isExcluded(msg.text, trimmedInput) &&
-        isSameTimePeriod(msg) &&   // ← ここを msg に
-        isSameDay(msg)             // ← 同じく msg に
-    )
-  : [];
+  // 入力中文字のプレビュー
+  const inputPreview =
+    trimmedInput !== ''
+      ? {
+          id: 'preview',
+          user: username,
+          text: input,
+          time: getCurrentTime(),
+          preview: true,
+          color: '', // プレビューは色なし
+        }
+      : null;
 
-  const inputPreview = trimmedInput
-    ? {
-        id: 'preview',
-        user: username,
-        text: input,
-        time: getCurrentTime(),
-        preview: true,
-      }
-    : null;
+  // 入力中は“除外ワード単体”の候補は落とす
+  const filteredMessages =
+    trimmedInput === ''
+      ? todaysMessages
+      : todaysMessages.filter((msg) => {
+          const partial = msg.text.includes(trimmedInput);
+          return !(partial && isExcluded(msg.text, trimmedInput));
+        });
 
-  const filteredMessages = messages.filter(msg => {
-    if (!trimmedInput) return true;
-    const isPartialMatch = msg.text.includes(trimmedInput);
-    return !(isPartialMatch && isExcluded(msg.text, trimmedInput));
-  });
+  // 完全一致のヒット（今日分のみ）
+  const exactMatches =
+    trimmedInput === ''
+      ? []
+      : todaysMessages.filter(
+          (msg) =>
+            msg.text === trimmedInput && !isExcluded(msg.text, trimmedInput)
+        );
 
+  // 表示用の結合（末尾にプレビューを足す）
   const combinedMessages = inputPreview
     ? [...filteredMessages, inputPreview]
     : filteredMessages;
@@ -196,36 +218,92 @@ const SimpleChat = () => {
     <div style={{ maxWidth: 600, margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
       <h2>チャットアプリ（Supabase連携＋プレビュー＆検索候補付き）</h2>
 
-      <div ref={logRef} style={{ border: '1px solid #ccc', height: 320, overflowY: 'scroll', padding: 10, marginBottom: 10, backgroundColor: '#f9f9f9', borderRadius: 8 }}>
-        {combinedMessages.map(({ id, user, text, time, preview, color }) => (
-          <div key={id} style={{ marginBottom: 12, padding: 8, backgroundColor: preview ? '#fffbe6' : '#eef2f7', borderRadius: 8, position: 'relative', opacity: preview ? 0.6 : 1, fontStyle: preview ? 'italic' : 'normal', wordBreak: 'break-word', color: color || 'black' }}>
-            <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
-              {user} {preview && <span style={{ fontSize: 12, color: '#999' }}>(入力中)</span>}
-            </div>
-            <div style={{ whiteSpace: 'pre-wrap', fontSize: 16, color: color === 'red' ? 'red' : 'black' }}>{text}</div>
-            <div style={{ position: 'absolute', right: 8, bottom: 8, fontSize: 12, color: '#888' }}>{time}</div>
-            {!preview && (
-              <button onClick={() => handleDelete(id)} style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, background: 'transparent', border: 'none', color: 'red', cursor: 'pointer' }}>
-                削除
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-
+      {/* 今日の完全一致だけ表示（下部だけに出す運用に合わせて上部の枠は無し） */}
       {exactMatches.length > 0 && (
-        <div style={{ marginBottom: 10, padding: 10, backgroundColor: '#fff4e6', border: '1px solid #ffa726', borderRadius: 8 }}>
-          <strong>過去に同じ内容が {exactMatches.length} 件見つかりました：</strong>
+        <div
+          style={{
+            marginBottom: 10,
+            padding: 10,
+            backgroundColor: '#fff4e6',
+            border: '1px solid #ffa726',
+            borderRadius: 8,
+          }}
+        >
+          <strong>今日、同じ内容が {exactMatches.length} 件見つかりました：</strong>
           <ul style={{ paddingLeft: 16, marginTop: 6 }}>
             {exactMatches.map((msg) => (
-              <li key={msg.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
-                <span><strong>{msg.user}</strong>: <span style={{ color: msg.color }}>{msg.text}</span></span>
+              <li
+                key={msg.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: 14,
+                  marginBottom: 4,
+                }}
+              >
+                <span style={{ color: msg.color === 'red' ? 'red' : 'black' }}>
+                  <strong>{msg.user}</strong>: {msg.text}
+                </span>
                 <span style={{ color: '#999', whiteSpace: 'nowrap' }}>{msg.time}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
+
+      <div
+        ref={logRef}
+        style={{
+          border: '1px solid #ccc',
+          height: 320,
+          overflowY: 'scroll',
+          padding: 10,
+          marginBottom: 10,
+          backgroundColor: '#f9f9f9',
+          borderRadius: 8,
+        }}
+      >
+        {combinedMessages.map(({ id, user, text, time, preview, color }) => (
+          <div
+            key={id}
+            style={{
+              marginBottom: 12,
+              padding: 8,
+              backgroundColor: preview ? '#fffbe6' : '#eef2f7',
+              borderRadius: 8,
+              position: 'relative',
+              opacity: preview ? 0.6 : 1,
+              fontStyle: preview ? 'italic' : 'normal',
+              wordBreak: 'break-word',
+            }}
+          >
+            <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
+              {user} {preview && <span style={{ fontSize: 12, color: '#999' }}>(入力中)</span>}
+            </div>
+            <div style={{ whiteSpace: 'pre-wrap', fontSize: 16, color: color === 'red' ? 'red' : 'black' }}>
+              {text}
+            </div>
+            <div style={{ position: 'absolute', right: 8, bottom: 8, fontSize: 12, color: '#888' }}>{time}</div>
+            {!preview && (
+              <button
+                onClick={() => handleDelete(id)}
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  fontSize: 10,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'red',
+                  cursor: 'pointer',
+                }}
+              >
+                削除
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <input
@@ -236,9 +314,9 @@ const SimpleChat = () => {
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               if (e.ctrlKey || e.metaKey) {
-                sendMessage('black');
+                sendMessage('black'); // Ctrl/⌘+Enter -> 黒
               } else {
-                sendMessage('red');
+                sendMessage('red');   // Enter -> 赤
               }
             }
           }}
