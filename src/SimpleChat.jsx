@@ -196,7 +196,8 @@ const SimpleChat = () => {
       : todaysMessages.filter(
           (msg) =>
             msg.text === trimmedInput && !isExcluded(msg.text, trimmedInput)
-        );
+        )
+        .slice(-6).reverse();
 
   // 表示用の結合（末尾にプレビューを足す）
   const combinedMessages = inputPreview
